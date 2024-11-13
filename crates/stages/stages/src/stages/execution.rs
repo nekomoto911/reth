@@ -324,8 +324,8 @@ where
 
         // prepare execution output for writing
         let time = Instant::now();
-        let ExecutionOutcome { bundle, receipts, requests, first_block } = executor.finalize();
-        let state = ExecutionOutcome::new(bundle, receipts, first_block, requests);
+        let state = executor.finalize();
+        debug!(target: "sync::stages::execution", start = start_block, end = stage_progress, state = ?state.bundle);
         let write_preparation_duration = time.elapsed();
 
         // log the gas per second for the range we just executed
