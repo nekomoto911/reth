@@ -1,17 +1,16 @@
 //! Helper type that represents one of two possible executor types
 
-use crate::{execute::Executor, Database, OnStateHook};
+use crate::{execute::Executor, OnStateHook};
 
 // re-export Either
 pub use futures_util::future::Either;
 use reth_execution_types::{BlockExecutionOutput, BlockExecutionResult};
 use reth_primitives_traits::{NodePrimitives, RecoveredBlock};
 
-impl<A, B, DB> Executor<DB> for Either<A, B>
+impl<'db, A, B> Executor<'db> for Either<A, B>
 where
-    A: Executor<DB>,
-    B: Executor<DB, Primitives = A::Primitives, Error = A::Error>,
-    DB: Database,
+    A: Executor<'db>,
+    B: Executor<'db, Primitives = A::Primitives, Error = A::Error>,
 {
     type Primitives = A::Primitives;
     type Error = A::Error;
@@ -58,7 +57,7 @@ where
         state: F,
     ) -> Result<BlockExecutionOutput<<Self::Primitives as NodePrimitives>::Receipt>, Self::Error>
     where
-        F: FnMut(&revm::database::State<DB>),
+        F: FnMut(&dyn crate::state::State),
     {
         match self {
             Self::Left(a) => a.execute_with_state_closure(block, state),
@@ -66,10 +65,17 @@ where
         }
     }
 
-    fn into_state(self) -> revm::database::State<DB> {
+    fn into_state(self) -> Box<dyn crate::state::State + 'db> {
         match self {
             Self::Left(a) => a.into_state(),
             Self::Right(b) => b.into_state(),
+        }
+    }
+
+    fn state_mut(&mut self) -> &mut dyn crate::state::State {
+        match self {
+            Self::Left(a) => a.state_mut(),
+            Self::Right(b) => b.state_mut(),
         }
     }
 

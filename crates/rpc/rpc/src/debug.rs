@@ -635,8 +635,9 @@ where
                 let mut witness_record = ExecutionWitnessRecord::default();
 
                 let _ = block_executor
-                    .execute_with_state_closure(&(*block).clone(), |statedb: &State<_>| {
-                        witness_record.record_executed_state(statedb);
+                    .execute_with_state_closure(&(*block).clone(), |statedb: &dyn reth_evm::state::State| {
+                        // TODO(nekomoto911): witness_record.record_executed_state(statedb);
+                        todo!()
                     })
                     .map_err(|err| EthApiError::Internal(err.into()))?;
 

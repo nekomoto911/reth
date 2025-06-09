@@ -29,7 +29,7 @@ use revm::{
 
 /// A type that knows how to execute a block. It is assumed to operate on a
 /// [`crate::Evm`] internally and use [`State`] as database.
-pub trait Executor<DB: Database>: Sized {
+pub trait Executor<'db>: Sized {
     /// The primitive types used by the executor.
     type Primitives: NodePrimitives;
     /// The error type returned by the executor.
@@ -100,11 +100,11 @@ pub trait Executor<DB: Database>: Sized {
         mut f: F,
     ) -> Result<BlockExecutionOutput<<Self::Primitives as NodePrimitives>::Receipt>, Self::Error>
     where
-        F: FnMut(&State<DB>),
+        F: FnMut(&dyn crate::state::State),
     {
         let result = self.execute_one(block)?;
         let mut state = self.into_state();
-        f(&state);
+        f(state.as_ref());
         Ok(BlockExecutionOutput { state: state.take_bundle(), result })
     }
 
@@ -124,7 +124,10 @@ pub trait Executor<DB: Database>: Sized {
     }
 
     /// Consumes the executor and returns the [`State`] containing all state changes.
-    fn into_state(self) -> State<DB>;
+    fn into_state(self) -> Box<dyn crate::state::State + 'db>;
+
+    /// Returns a mutable reference to the current state.
+    fn state_mut(&mut self) -> &mut dyn crate::state::State;
 
     /// The size hint of the batch's tracked state size.
     ///
@@ -419,10 +422,10 @@ impl<F, DB: Database> BasicBlockExecutor<F, DB> {
     }
 }
 
-impl<F, DB> Executor<DB> for BasicBlockExecutor<F, DB>
+impl<'db, F, DB> Executor<'db> for BasicBlockExecutor<F, DB>
 where
     F: ConfigureEvm,
-    DB: Database,
+    DB: Database + 'db,
 {
     type Primitives = F::Primitives;
     type Error = BlockExecutionError;
@@ -461,8 +464,12 @@ where
         Ok(result)
     }
 
-    fn into_state(self) -> State<DB> {
-        self.db
+    fn into_state(self) -> Box<dyn crate::state::State + 'db> {
+        Box::new(self.db)
+    }
+
+    fn state_mut(&mut self) -> &mut dyn crate::state::State {
+        &mut self.db
     }
 
     fn size_hint(&self) -> usize {
